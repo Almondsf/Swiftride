@@ -6,6 +6,9 @@ from rest_framework.permissions import IsAuthenticated
 from rides.models import Ride
 from .paystack import inititalize_payment, verify_payment
 from rest_framework.throttling import UserRateThrottle
+import hmac
+import hashlib
+from django.conf import settings
 
 
 class PaymentRateThrottle(UserRateThrottle):
@@ -15,6 +18,16 @@ class InitializePaymentView(APIView):
     throttle_classes = [PaymentRateThrottle]
     
     def post(self, request):
+        paystack_signature = request.headers.get('x-paystack-signature')
+        computed_signature = hmac.new(
+            settings.PAYSTACK_SECRET_KEY.encode('utf-8'),
+            request.body,
+            hashlib.sha512
+        ).hexdigest()
+
+        if not hmac.compare_digest(paystack_signature, computed_signature):
+            return Response({'error': 'Invalid signature'}, status=400)
+        
         ride_id = request.data.get('ride_id')
         ride = get_object_or_404(Ride, id=ride_id, rider=request.user)
         
