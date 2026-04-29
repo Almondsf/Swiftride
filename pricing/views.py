@@ -4,9 +4,18 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework import status
 from .calculator import calculate_fare
+from rest_framework.throttling import UserRateThrottle
+from django.views.decorators.cache import cache_page
+from django.utils.decorators import method_decorator
 
+
+class FareEstimateRateThrottle(UserRateThrottle):
+    rate = '10/minute'
+    
+@method_decorator(cache_page(60 * 15), name='dispatch')
 class FareEstimateView(APIView):
-    # permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated]
+    throttle_classes = [FareEstimateRateThrottle]
     def post(self, request):
         try:
             pickup = request.data.get('pickup')

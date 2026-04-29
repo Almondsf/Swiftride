@@ -5,10 +5,14 @@ from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from rides.models import Ride
 from .paystack import inititalize_payment, verify_payment
+from rest_framework.throttling import UserRateThrottle
 
 
+class PaymentRateThrottle(UserRateThrottle):
+    rate = '5/minute'
 class InitializePaymentView(APIView):
     permission_classes = [IsAuthenticated]
+    throttle_classes = [PaymentRateThrottle]
     
     def post(self, request):
         ride_id = request.data.get('ride_id')
@@ -16,6 +20,8 @@ class InitializePaymentView(APIView):
         
         if ride.status != 'completed':
             return Response({'error': 'Ride not completed'}, status=400)
+        if ride.is_paid:
+            return Response({'error': 'Ride has already been paid for'}, status=400)
         
         response = inititalize_payment(request.user.email, ride.fare)
         
