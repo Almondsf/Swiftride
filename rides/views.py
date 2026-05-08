@@ -6,6 +6,7 @@ from .permissions import IsRider, IsDriver
 from pricing.calculator import calculate_fare
 from django.utils import timezone
 from geopy.distance import geodesic
+from .tasks import find_driver_for_ride
 
 class RideCreateView(generics.CreateAPIView):
     queryset = Ride.objects.all()
@@ -13,7 +14,8 @@ class RideCreateView(generics.CreateAPIView):
     permission_classes = [IsRider]
     
     def perform_create(self, serializer):
-        serializer.save(rider=self.request.user)
+        ride = serializer.save(rider=self.request.user)
+        find_driver_for_ride.delay(ride.id)
     
     
 class RideListView(generics.ListAPIView):
