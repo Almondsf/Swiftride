@@ -1,0 +1,40 @@
+version: '3.8'
+
+services:
+  web:
+    build: .
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    depends_on:
+      - redis
+      - db
+    volumes:
+      - .:/app
+
+  celery:
+    build: .
+    command: celery -A swiftride worker --loglevel=info --pool=solo
+    env_file:
+      - .env
+    depends_on:
+      - redis
+      - db
+    volumes:
+      - .:/app
+
+  redis:
+    image: redis:7
+
+  db:
+    image: postgres:15
+    environment:
+      POSTGRES_DB: swiftride
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+volumes:
+  postgres_data:
