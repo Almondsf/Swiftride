@@ -16,6 +16,20 @@ jobs:
         ports:
           - 6379:6379
 
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_DB: swiftride
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
     steps:
       - uses: actions/checkout@v3
 
@@ -34,6 +48,7 @@ jobs:
           DJANGO_SECRET_KEY: ${{ secrets.DJANGO_SECRET_KEY }}
           DEBUG: ${{ secrets.DEBUG }}
           PAYSTACK_SECRET_KEY: ${{ secrets.PAYSTACK_SECRET_KEY }}
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/swiftride
         run: python manage.py migrate
 
       - name: Run tests
@@ -41,4 +56,5 @@ jobs:
           DJANGO_SECRET_KEY: ${{ secrets.DJANGO_SECRET_KEY }}
           DEBUG: ${{ secrets.DEBUG }}
           PAYSTACK_SECRET_KEY: ${{ secrets.PAYSTACK_SECRET_KEY }}
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/swiftride
         run: python manage.py test
