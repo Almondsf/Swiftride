@@ -2,6 +2,15 @@ import json
 from channels.generic.websocket import AsyncWebsocketConsumer
 from rides.models import Ride
 from channels.db import database_sync_to_async
+from .models import DriverLocation
+
+
+@database_sync_to_async
+def save_driver_location(driver, latitude, longitude):
+    DriverLocation.objects.update_or_create(
+        driver=driver,
+        defaults={'latitude': latitude, 'longitude': longitude},
+    )
 
 class LocationConsumer(AsyncWebsocketConsumer):
     async def connect(self):
@@ -20,9 +29,11 @@ class LocationConsumer(AsyncWebsocketConsumer):
             ride = await database_sync_to_async(Ride.objects.get)(
                 id=self.ride_id
             )
-            if user != ride.rider and user != ride.driver:
+            # compare ids: touching ride.rider/ride.driver would hit the DB from async code
+            if user.id not in (ride.rider_id, ride.driver_id):
                 await self.close()
                 return
+            self.is_driver = user.id == ride.driver_id
         except Ride.DoesNotExist:
             await self.close()
             return
@@ -43,6 +54,10 @@ class LocationConsumer(AsyncWebsocketConsumer):
         data = json.loads(text_data)
         latitude = data['latitude']
         longitude = data['longitude']
+        
+        # the driver's live position also keeps their matching location fresh
+        if self.is_driver:
+            await save_driver_location(self.scope['user'], latitude, longitude)
         
         # broadcast to everyone in the room
         await self.channel_layer.group_send(
