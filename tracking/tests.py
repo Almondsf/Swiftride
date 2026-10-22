@@ -79,6 +79,40 @@ class LocationConsumerTests(TransactionTestCase):
         location = DriverLocation.objects.get(driver=self.driver)
         self.assertEqual(location.latitude, Decimal('6.51'))
 
+    def test_driver_broadcast_includes_eta_to_pickup(self):
+        Ride.objects.filter(id=self.ride.id).update(
+            pickup_lat=Decimal('6.5095'), pickup_lng=Decimal('3.3711'),
+            dropoff_lat=Decimal('6.6018'), dropoff_lng=Decimal('3.3515'),
+        )
+
+        async def run():
+            driver_ws = self.communicator(self.driver)
+            rider_ws = self.communicator(self.rider)
+            await driver_ws.connect(timeout=5)
+            await rider_ws.connect(timeout=5)
+            # ~2.2km straight line north of pickup
+            await driver_ws.send_json_to({'latitude': 6.5295, 'longitude': 3.3711})
+            message = await rider_ws.receive_json_from(timeout=5)
+            self.assertEqual(message['heading_to'], 'pickup')
+            self.assertAlmostEqual(message['distance_km'], 2.9, delta=0.1)  # 2.2km * road factor
+            self.assertEqual(message['eta_minutes'], 7)
+            await driver_ws.disconnect()
+            await rider_ws.disconnect()
+
+        async_to_sync(run)()
+
+    def test_malformed_position_gets_error_not_broadcast(self):
+        async def run():
+            driver_ws = self.communicator(self.driver)
+            await driver_ws.connect(timeout=5)
+            await driver_ws.send_json_to({'latitude': 'north'})
+            message = await driver_ws.receive_json_from(timeout=5)
+            self.assertIn('error', message)
+            await driver_ws.disconnect()
+
+        async_to_sync(run)()
+        self.assertFalse(DriverLocation.objects.filter(driver=self.driver).exists())
+
     def test_stranger_is_rejected(self):
         async def run():
             ws = self.communicator(self.stranger)
@@ -133,6 +167,7 @@ class NotificationTests(TransactionTestCase):
             offer_message = await driver_ws.receive_json_from(timeout=5)
             self.assertEqual(offer_message['event'], 'ride.offer')
             self.assertEqual(offer_message['data']['ride_id'], self.ride.id)
+            self.assertIn('eta_minutes', offer_message['data'])
 
             self.assertEqual(await database_sync_to_async(accept_offer)(), 200)
             for ws in (rider_ws, driver_ws):

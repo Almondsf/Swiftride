@@ -4,6 +4,8 @@ import logging
 from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
 
+from .eta import estimate_eta
+
 logger = logging.getLogger(__name__)
 
 
@@ -36,15 +38,21 @@ def notify_ride_status(ride, **extra):
 
 def notify_offer(offer):
     ride = offer.ride
-    send_to_user(offer.driver_id, 'ride.offer', {
+    data = {
         'offer_id': offer.id,
         'ride_id': ride.id,
         'pickup_location': ride.pickup_location,
         'dropoff_location': ride.dropoff_location,
         'pickup_lat': str(ride.pickup_lat),
         'pickup_lng': str(ride.pickup_lng),
+        'surge_multiplier': str(ride.surge_multiplier),
         'expires_at': offer.expires_at.isoformat(),
-    })
+    }
+    location = getattr(offer.driver, 'location', None)
+    if location:
+        # how far the driver is from the pickup, to help them decide
+        data.update(estimate_eta(location.latitude, location.longitude, ride.pickup_lat, ride.pickup_lng))
+    send_to_user(offer.driver_id, 'ride.offer', data)
 
 
 def notify_offer_withdrawn(driver_id, offer_id, ride_id):
