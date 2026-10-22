@@ -8,6 +8,7 @@ from .models import Ride, RideOffer
 from .serializers import RideSerializer, RideOfferSerializer
 from .permissions import IsRider, IsDriver
 from pricing.calculator import calculate_fare
+from pricing.surge import current_surge
 from django.utils import timezone
 from geopy.distance import geodesic
 from .tasks import find_driver_for_ride
@@ -26,7 +27,9 @@ class RideCreateView(generics.CreateAPIView):
     permission_classes = [IsRider]
     
     def perform_create(self, serializer):
-        ride = serializer.save(rider=self.request.user)
+        data = serializer.validated_data
+        surge = current_surge(data['pickup_lat'], data['pickup_lng'])
+        ride = serializer.save(rider=self.request.user, surge_multiplier=surge)
         find_driver_for_ride.delay(ride.id)
     
     
@@ -159,6 +162,6 @@ class CompleteRideView(generics.UpdateAPIView):
             (ride.pickup_lat, ride.pickup_lng),
             (ride.dropoff_lat, ride.dropoff_lng)
         ).km
-        fare =  calculate_fare(distance_km, duration_minutes)
+        fare = calculate_fare(distance_km, duration_minutes, float(ride.surge_multiplier))
         ride = serializer.save(status='completed', fare=fare, completed_at=completed_at)
         notify_ride_status(ride)

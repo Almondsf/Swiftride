@@ -22,6 +22,8 @@ class Ride(models.Model):
     dropoff_lat = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
     dropoff_lng = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
     fare = models.DecimalField(max_digits=8, decimal_places=2, null=True, blank=True)
+    # locked in when the ride is requested so the rider pays what they were quoted
+    surge_multiplier = models.DecimalField(max_digits=3, decimal_places=1, default=1.0)
     payment_reference = models.CharField(max_length=100, null=True, blank=True)
     is_paid = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)

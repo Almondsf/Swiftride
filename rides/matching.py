@@ -32,20 +32,27 @@ def driver_is_busy(driver_id):
     return on_ride.filter(driver_id=driver_id).exists() or deciding.filter(driver_id=driver_id).exists()
 
 
+def bounding_box(lat, lng, radius_km):
+    """(lat_range, lng_range) of a box enclosing the circle; a cheap DB prefilter."""
+    lat, lng = float(lat), float(lng)
+    lat_delta = radius_km / 111.0
+    lng_delta = radius_km / (111.0 * max(math.cos(math.radians(lat)), 0.01))
+    return (lat - lat_delta, lat + lat_delta), (lng - lng_delta, lng + lng_delta)
+
+
 def nearby_driver_locations(lat, lng, radius_km=SEARCH_RADIUS_KM, exclude_driver_ids=()):
     """Available drivers within radius_km of (lat, lng), nearest first."""
     lat, lng = float(lat), float(lng)
 
     # cheap bounding-box filter in the DB, exact distance in Python
-    lat_delta = radius_km / 111.0
-    lng_delta = radius_km / (111.0 * max(math.cos(math.radians(lat)), 0.01))
+    lat_range, lng_range = bounding_box(lat, lng, radius_km)
 
     on_ride, deciding = busy_driver_ids()
     candidates = DriverLocation.objects.filter(
         is_online=True,
         updated_at__gte=timezone.now() - LOCATION_STALE_AFTER,
-        latitude__range=(lat - lat_delta, lat + lat_delta),
-        longitude__range=(lng - lng_delta, lng + lng_delta),
+        latitude__range=lat_range,
+        longitude__range=lng_range,
     ).exclude(
         driver_id__in=on_ride
     ).exclude(

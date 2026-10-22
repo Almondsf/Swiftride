@@ -159,6 +159,17 @@ SIMPLE_JWT = {
 }
 
 
+# shared cache (surge values etc.) across processes when Redis is available
+CACHE_REDIS_URL = config('CACHE_REDIS_URL', default='')
+
+if CACHE_REDIS_URL:
+    CACHES = {
+        'default': {
+            'BACKEND': 'django.core.cache.backends.redis.RedisCache',
+            'LOCATION': CACHE_REDIS_URL,
+        }
+    }
+
 CELERY_BROKER_URL = config('CELERY_BROKER_URL', default='redis://127.0.0.1:6379/0')
 CELERY_RESULT_BACKEND = config('CELERY_RESULT_BACKEND', default=CELERY_BROKER_URL)
 
