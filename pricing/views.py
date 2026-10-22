@@ -21,13 +21,12 @@ class FareEstimateView(APIView):
             pickup = request.data.get('pickup')
             dropoff = request.data.get('dropoff')
             duration_minutes = request.data.get('duration_minutes', 0)
-            surge_multiplier = request.data.get('surge_multiplier', 1.0)
 
             if not pickup or not dropoff:
                 return Response({'error': 'Pickup and dropoff locations are required.'}, status=status.HTTP_400_BAD_REQUEST)
 
             distance_km = geodesic(pickup, dropoff).kilometers
-            fare = calculate_fare(distance_km, duration_minutes, surge_multiplier)
+            fare = calculate_fare(distance_km, duration_minutes)
 
             return Response({'estimated_fare': fare}, status=status.HTTP_200_OK)
         except Exception as e:
