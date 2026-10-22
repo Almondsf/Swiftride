@@ -3,6 +3,7 @@ from django.db import transaction
 from django.utils import timezone
 from .models import Ride, RideOffer
 from .matching import offer_to_nearest_driver, OFFER_TIMEOUT
+from .notifications import notify_offer, notify_offer_withdrawn, notify_ride_status
 
 # when nobody is free, keep looking for ~2 minutes before giving up
 MATCH_RETRY_DELAY_SECONDS = 15
@@ -28,9 +29,11 @@ def find_driver_for_ride(ride_id, attempt=1):
         if not offer and attempt >= MAX_MATCH_ATTEMPTS:
             ride.status = 'cancelled'
             ride.save(update_fields=['status', 'updated_at'])
+            transaction.on_commit(lambda: notify_ride_status(ride, reason='no_driver_found'))
             return
 
     if offer:
+        notify_offer(offer)
         expire_offer.apply_async(args=[offer.id], countdown=OFFER_TIMEOUT.total_seconds())
     else:
         find_driver_for_ride.apply_async(args=[ride_id, attempt + 1], countdown=MATCH_RETRY_DELAY_SECONDS)
@@ -41,4 +44,5 @@ def expire_offer(offer_id):
     expired = RideOffer.objects.filter(id=offer_id, status='pending').update(status='expired')
     if expired:
         offer = RideOffer.objects.get(id=offer_id)
+        notify_offer_withdrawn(offer.driver_id, offer.id, offer.ride_id)
         find_driver_for_ride.delay(offer.ride_id)

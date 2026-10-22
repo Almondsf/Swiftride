@@ -89,11 +89,23 @@ WSGI_APPLICATION = 'swiftride.wsgi.application'
 
 ASGI_APPLICATION = 'swiftride.asgi.application'
 
-CHANNEL_LAYERS = {
-    "default": {
-        "BACKEND": "channels.layers.InMemoryChannelLayer"
+# Redis lets Celery workers and other processes push to WebSocket clients;
+# the in-memory layer only works within a single process (fine for local dev/tests).
+CHANNEL_REDIS_URL = config('CHANNEL_REDIS_URL', default='')
+
+if CHANNEL_REDIS_URL:
+    CHANNEL_LAYERS = {
+        "default": {
+            "BACKEND": "channels_redis.core.RedisChannelLayer",
+            "CONFIG": {"hosts": [CHANNEL_REDIS_URL]},
+        }
     }
-}
+else:
+    CHANNEL_LAYERS = {
+        "default": {
+            "BACKEND": "channels.layers.InMemoryChannelLayer"
+        }
+    }
 # Database
 # https://docs.djangoproject.com/en/6.0/ref/settings/#databases
 

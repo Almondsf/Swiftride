@@ -11,10 +11,14 @@ from pricing.calculator import calculate_fare
 from django.utils import timezone
 from geopy.distance import geodesic
 from .tasks import find_driver_for_ride
+from .notifications import notify_ride_status, notify_offer_withdrawn
 
 
 def withdraw_pending_offers(ride_id):
-    RideOffer.objects.filter(ride_id=ride_id, status='pending').update(status='expired')
+    pending = list(RideOffer.objects.filter(ride_id=ride_id, status='pending').values_list('id', 'driver_id'))
+    RideOffer.objects.filter(id__in=[offer_id for offer_id, _ in pending]).update(status='expired')
+    for offer_id, driver_id in pending:
+        notify_offer_withdrawn(driver_id, offer_id, ride_id)
 
 class RideCreateView(generics.CreateAPIView):
     queryset = Ride.objects.all()
@@ -59,6 +63,7 @@ class AcceptRideView(generics.UpdateAPIView):
         
         withdraw_pending_offers(kwargs['pk'])
         ride = Ride.objects.get(pk=kwargs['pk'])
+        notify_ride_status(ride)
         return Response(self.get_serializer(ride).data)
 
 
@@ -97,6 +102,7 @@ class AcceptOfferView(APIView):
             return Response({'error': 'Ride is no longer available'}, status=status.HTTP_409_CONFLICT)
         
         ride = Ride.objects.get(pk=offer.ride_id)
+        notify_ride_status(ride)
         return Response(RideSerializer(ride).data)
 
 
@@ -121,7 +127,8 @@ class StartRideView(generics.UpdateAPIView):
        return Ride.objects.filter(status='accepted', driver=self.request.user)
     
     def perform_update(self, serializer):
-        serializer.save(status='in_progress', started_at=timezone.now())
+        ride = serializer.save(status='in_progress', started_at=timezone.now())
+        notify_ride_status(ride)
 
 class CancelRideView(generics.UpdateAPIView):
     serializer_class = RideSerializer
@@ -133,6 +140,7 @@ class CancelRideView(generics.UpdateAPIView):
     def perform_update(self, serializer):
         ride = serializer.save(status='cancelled')
         withdraw_pending_offers(ride.id)
+        notify_ride_status(ride)
         
 class CompleteRideView(generics.UpdateAPIView):
     serializer_class = RideSerializer
@@ -152,4 +160,5 @@ class CompleteRideView(generics.UpdateAPIView):
             (ride.dropoff_lat, ride.dropoff_lng)
         ).km
         fare =  calculate_fare(distance_km, duration_minutes)
-        serializer.save(status='completed', fare=fare, completed_at=completed_at)
+        ride = serializer.save(status='completed', fare=fare, completed_at=completed_at)
+        notify_ride_status(ride)

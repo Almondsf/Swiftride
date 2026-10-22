@@ -9,6 +9,7 @@ services:
       - .env
     environment:
       CELERY_BROKER_URL: redis://redis:6379/0
+      CHANNEL_REDIS_URL: redis://redis:6379/1
     depends_on:
       - redis
       - db
@@ -22,6 +23,7 @@ services:
       - .env
     environment:
       CELERY_BROKER_URL: redis://redis:6379/0
+      CHANNEL_REDIS_URL: redis://redis:6379/1
     depends_on:
       - redis
       - db

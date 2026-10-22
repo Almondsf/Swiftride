@@ -9,12 +9,15 @@ from channels.auth import AuthMiddlewareStack
 django_asgi_app = get_asgi_application()
 
 from tracking.routing import websocket_urlpatterns
+from tracking.middleware import JWTAuthMiddleware
 
 application = ProtocolTypeRouter({
     'http': django_asgi_app,
     'websocket': AuthMiddlewareStack(
-        URLRouter(
-            websocket_urlpatterns
+        JWTAuthMiddleware(
+            URLRouter(
+                websocket_urlpatterns
+            )
         )
     ),
 })

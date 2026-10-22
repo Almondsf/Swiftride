@@ -1,6 +1,7 @@
 import json
-from channels.generic.websocket import AsyncWebsocketConsumer
+from channels.generic.websocket import AsyncWebsocketConsumer, AsyncJsonWebsocketConsumer
 from rides.models import Ride
+from rides.notifications import user_group
 from channels.db import database_sync_to_async
 from .models import DriverLocation
 
@@ -74,3 +75,23 @@ class LocationConsumer(AsyncWebsocketConsumer):
             'latitude': event['latitude'],
             'longitude': event['longitude'],
         }))
+
+class NotificationConsumer(AsyncJsonWebsocketConsumer):
+    """Per-user stream of ride events (offers, status changes)."""
+
+    async def connect(self):
+        user = self.scope['user']
+        if user.is_anonymous:
+            await self.close()
+            return
+        
+        self.group_name = user_group(user.id)
+        await self.channel_layer.group_add(self.group_name, self.channel_name)
+        await self.accept()
+    
+    async def disconnect(self, close_code):
+        if hasattr(self, 'group_name'):
+            await self.channel_layer.group_discard(self.group_name, self.channel_name)
+    
+    async def notify(self, event):
+        await self.send_json({'event': event['event'], 'data': event['data']})
