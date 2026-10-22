@@ -31,3 +31,27 @@ class Ride(models.Model):
     
     def __str__(self):
         return f"Ride {self.id} ({self.status})"
+
+
+class RideOffer(models.Model):
+    STATUS_CHOICES = [
+        ('pending', 'Pending'),
+        ('accepted', 'Accepted'),
+        ('declined', 'Declined'),
+        ('expired', 'Expired'),
+    ]
+
+    ride = models.ForeignKey(Ride, on_delete=models.CASCADE, related_name='offers')
+    driver = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name='ride_offers')
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField()
+
+    class Meta:
+        constraints = [
+            # a ride is never offered to the same driver twice
+            models.UniqueConstraint(fields=['ride', 'driver'], name='unique_offer_per_driver'),
+        ]
+
+    def __str__(self):
+        return f"Offer {self.id}: ride {self.ride_id} -> {self.driver_id} ({self.status})"

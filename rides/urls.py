@@ -1,5 +1,5 @@
 from django.urls import path
-from .views import RideCreateView, RideListView, AvailableRidesView, AcceptRideView, StartRideView, CompleteRideView, CancelRideView  
+from .views import RideCreateView, RideListView, AvailableRidesView, AcceptRideView, StartRideView, CompleteRideView, CancelRideView, RideOfferListView, AcceptOfferView, DeclineOfferView
 
 urlpatterns = [
     path('request/', RideCreateView.as_view(), name='ride-request'),
@@ -9,4 +9,7 @@ urlpatterns = [
     path('<int:pk>/start/', StartRideView.as_view(), name='start-ride'),
     path('<int:pk>/complete/', CompleteRideView.as_view(), name='complete-ride'),
     path('<int:pk>/cancel/', CancelRideView.as_view(), name='cancel-ride'),
+    path('offers/', RideOfferListView.as_view(), name='ride-offers'),
+    path('offers/<int:pk>/accept/', AcceptOfferView.as_view(), name='accept-offer'),
+    path('offers/<int:pk>/decline/', DeclineOfferView.as_view(), name='decline-offer'),
 ]

@@ -1,4 +1,4 @@
-from .models import Ride
+from .models import Ride, RideOffer
 from rest_framework.serializers import ModelSerializer
 
 class RideSerializer(ModelSerializer):
@@ -13,3 +13,12 @@ class RideSerializer(ModelSerializer):
             'dropoff_lat': {'required': True, 'allow_null': False},
             'dropoff_lng': {'required': True, 'allow_null': False},
         }
+
+
+class RideOfferSerializer(ModelSerializer):
+    ride = RideSerializer(read_only=True)
+
+    class Meta:
+        model = RideOffer
+        fields = ['id', 'ride', 'status', 'created_at', 'expires_at']
+        read_only_fields = fields

@@ -6,15 +6,33 @@ from django.utils import timezone
 from geopy.distance import geodesic
 
 from tracking.models import DriverLocation
-from .models import Ride
+from .models import Ride, RideOffer
 
 SEARCH_RADIUS_KM = 10
 # a driver who hasn't reported in this long is treated as gone
 LOCATION_STALE_AFTER = timedelta(minutes=2)
+# how long a driver has to accept an offer before it moves on
+OFFER_TIMEOUT = timedelta(seconds=20)
 ACTIVE_STATUSES = ['accepted', 'in_progress']
 
 
-def nearby_driver_locations(lat, lng, radius_km=SEARCH_RADIUS_KM):
+def busy_driver_ids():
+    """Drivers on a ride or currently deciding on an offer."""
+    on_ride = Ride.objects.filter(
+        status__in=ACTIVE_STATUSES, driver__isnull=False
+    ).values('driver_id')
+    deciding = RideOffer.objects.filter(
+        status='pending', expires_at__gt=timezone.now()
+    ).values('driver_id')
+    return on_ride, deciding
+
+
+def driver_is_busy(driver_id):
+    on_ride, deciding = busy_driver_ids()
+    return on_ride.filter(driver_id=driver_id).exists() or deciding.filter(driver_id=driver_id).exists()
+
+
+def nearby_driver_locations(lat, lng, radius_km=SEARCH_RADIUS_KM, exclude_driver_ids=()):
     """Available drivers within radius_km of (lat, lng), nearest first."""
     lat, lng = float(lat), float(lng)
 
@@ -22,13 +40,18 @@ def nearby_driver_locations(lat, lng, radius_km=SEARCH_RADIUS_KM):
     lat_delta = radius_km / 111.0
     lng_delta = radius_km / (111.0 * max(math.cos(math.radians(lat)), 0.01))
 
+    on_ride, deciding = busy_driver_ids()
     candidates = DriverLocation.objects.filter(
         is_online=True,
         updated_at__gte=timezone.now() - LOCATION_STALE_AFTER,
         latitude__range=(lat - lat_delta, lat + lat_delta),
         longitude__range=(lng - lng_delta, lng + lng_delta),
     ).exclude(
-        driver__drives__status__in=ACTIVE_STATUSES
+        driver_id__in=on_ride
+    ).exclude(
+        driver_id__in=deciding
+    ).exclude(
+        driver_id__in=list(exclude_driver_ids)
     ).select_related('driver')
 
     ranked = []
@@ -40,24 +63,19 @@ def nearby_driver_locations(lat, lng, radius_km=SEARCH_RADIUS_KM):
     return [location for _, location in ranked]
 
 
-def assign_nearest_driver(ride):
-    """Assign the closest available driver to a requested ride.
+def offer_to_nearest_driver(ride):
+    """Offer the ride to the closest available driver it hasn't been offered to yet.
 
-    Returns the driver, or None if nobody is free (or the ride is no longer
-    waiting for a driver).
+    Returns the new RideOffer, or None if nobody is available.
     """
-    for location in nearby_driver_locations(ride.pickup_lat, ride.pickup_lng):
+    already_offered = list(ride.offers.values_list('driver_id', flat=True))
+    for location in nearby_driver_locations(ride.pickup_lat, ride.pickup_lng, exclude_driver_ids=already_offered):
         with transaction.atomic():
-            # lock the driver so two rides being matched at once can't both get them
+            # lock the driver so two rides being matched at once can't both claim them
             DriverLocation.objects.select_for_update().get(pk=location.pk)
-            if Ride.objects.filter(driver=location.driver, status__in=ACTIVE_STATUSES).exists():
+            if driver_is_busy(location.driver_id):
                 continue
-
-            updated = Ride.objects.filter(pk=ride.pk, status='requested').update(
-                driver=location.driver, status='accepted', updated_at=timezone.now()
+            return RideOffer.objects.create(
+                ride=ride, driver=location.driver, expires_at=timezone.now() + OFFER_TIMEOUT
             )
-            if not updated:
-                # cancelled or picked up manually in the meantime
-                return None
-            return location.driver
     return None
