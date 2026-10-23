@@ -1,4 +1,4 @@
-from .models import Ride, RideOffer
+from .models import Ride, RideOffer, Rating
 from rest_framework.serializers import ModelSerializer
 
 class RideSerializer(ModelSerializer):
@@ -22,3 +22,11 @@ class RideOfferSerializer(ModelSerializer):
         model = RideOffer
         fields = ['id', 'ride', 'status', 'created_at', 'expires_at']
         read_only_fields = fields
+
+
+
+class RatingSerializer(ModelSerializer):
+    class Meta:
+        model = Rating
+        fields = ['id', 'ride', 'rater', 'ratee', 'score', 'comment', 'created_at']
+        read_only_fields = ['id', 'ride', 'rater', 'ratee', 'created_at']

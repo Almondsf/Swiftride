@@ -2,10 +2,10 @@ from rest_framework import generics, status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.shortcuts import get_object_or_404
-from .models import Ride, RideOffer
-from .serializers import RideSerializer, RideOfferSerializer
+from .models import Ride, RideOffer, Rating
+from .serializers import RideSerializer, RideOfferSerializer, RatingSerializer
 from .permissions import IsRider, IsDriver
 from pricing.calculator import calculate_fare
 from pricing.surge import current_surge
@@ -13,6 +13,8 @@ from django.utils import timezone
 from geopy.distance import geodesic
 from .tasks import find_driver_for_ride
 from .notifications import notify_ride_status, notify_offer_withdrawn
+from .ratings import rating_summary
+from accounts.models import CustomUser
 
 
 def withdraw_pending_offers(ride_id):
@@ -165,3 +167,34 @@ class CompleteRideView(generics.UpdateAPIView):
         fare = calculate_fare(distance_km, duration_minutes, float(ride.surge_multiplier))
         ride = serializer.save(status='completed', fare=fare, completed_at=completed_at)
         notify_ride_status(ride)
+
+
+class RateRideView(APIView):
+    """Rider rates the driver, or driver rates the rider, after a completed ride."""
+    permission_classes = [IsAuthenticated]
+    
+    def post(self, request, pk):
+        ride = get_object_or_404(Ride, pk=pk, status='completed')
+        if request.user.id == ride.rider_id:
+            ratee_id = ride.driver_id
+        elif request.user.id == ride.driver_id:
+            ratee_id = ride.rider_id
+        else:
+            return Response({'error': 'Not found.'}, status=status.HTTP_404_NOT_FOUND)
+        
+        serializer = RatingSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            with transaction.atomic():
+                serializer.save(ride=ride, rater=request.user, ratee_id=ratee_id)
+        except IntegrityError:
+            return Response({'error': 'You have already rated this ride'}, status=status.HTTP_409_CONFLICT)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+
+class UserRatingView(APIView):
+    permission_classes = [IsAuthenticated]
+    
+    def get(self, request, user_id):
+        get_object_or_404(CustomUser, pk=user_id)
+        return Response(rating_summary(user_id))

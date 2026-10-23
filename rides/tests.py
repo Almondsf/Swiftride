@@ -2,6 +2,7 @@ from datetime import timedelta
 from decimal import Decimal
 from unittest.mock import patch
 
+from django.core.cache import cache
 from django.urls import reverse
 from django.utils import timezone
 from rest_framework.test import APITestCase
@@ -104,6 +105,10 @@ class RideFlowTests(APITestCase):
 
 
 class FareEstimateTests(APITestCase):
+    def setUp(self):
+        # throttle counters and cached surge live in the cache, which outlives each test
+        cache.clear()
+
     def test_client_cannot_set_surge(self):
         rider = make_user('rider@test.com', 'rider', '0800000001')
         self.client.force_authenticate(rider)

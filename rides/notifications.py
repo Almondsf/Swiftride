@@ -5,6 +5,7 @@ from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
 
 from .eta import estimate_eta
+from .ratings import rating_summary
 
 logger = logging.getLogger(__name__)
 
@@ -32,6 +33,8 @@ def notify_ride_status(ride, **extra):
         'fare': str(ride.fare) if ride.fare is not None else None,
         **extra,
     }
+    if ride.driver_id:
+        data['driver_rating'] = rating_summary(ride.driver_id)['average']
     for user_id in {ride.rider_id, ride.driver_id} - {None}:
         send_to_user(user_id, 'ride.status', data)
 

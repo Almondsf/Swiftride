@@ -1,3 +1,4 @@
+from django.core.validators import MinValueValidator, MaxValueValidator
 from django.db import models
 from accounts.models import CustomUser
 
@@ -57,3 +58,21 @@ class RideOffer(models.Model):
 
     def __str__(self):
         return f"Offer {self.id}: ride {self.ride_id} -> {self.driver_id} ({self.status})"
+
+
+class Rating(models.Model):
+    ride = models.ForeignKey(Ride, on_delete=models.CASCADE, related_name='ratings')
+    rater = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name='ratings_given')
+    ratee = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name='ratings_received')
+    score = models.PositiveSmallIntegerField(validators=[MinValueValidator(1), MaxValueValidator(5)])
+    comment = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            # rider and driver each rate the other once per ride
+            models.UniqueConstraint(fields=['ride', 'rater'], name='unique_rating_per_rater'),
+        ]
+
+    def __str__(self):
+        return f"{self.score}/5 for {self.ratee_id} on ride {self.ride_id}"

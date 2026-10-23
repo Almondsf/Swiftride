@@ -7,6 +7,7 @@ from geopy.distance import geodesic
 
 from tracking.models import DriverLocation
 from .models import Ride, RideOffer
+from .ratings import low_rated_driver_ids
 
 SEARCH_RADIUS_KM = 10
 # a driver who hasn't reported in this long is treated as gone
@@ -57,6 +58,8 @@ def nearby_driver_locations(lat, lng, radius_km=SEARCH_RADIUS_KM, exclude_driver
         driver_id__in=on_ride
     ).exclude(
         driver_id__in=deciding
+    ).exclude(
+        driver_id__in=low_rated_driver_ids()
     ).exclude(
         driver_id__in=list(exclude_driver_ids)
     ).select_related('driver')
