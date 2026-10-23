@@ -9,6 +9,8 @@ from rest_framework.throttling import UserRateThrottle
 import hmac
 import hashlib
 from django.conf import settings
+from drf_spectacular.utils import extend_schema, inline_serializer
+from rest_framework import serializers
 
 
 class PaymentRateThrottle(UserRateThrottle):
@@ -17,6 +19,13 @@ class InitializePaymentView(APIView):
     permission_classes = [IsAuthenticated]
     throttle_classes = [PaymentRateThrottle]
 
+    @extend_schema(
+        request=inline_serializer('InitializePaymentRequest', {'ride_id': serializers.IntegerField()}),
+        responses=inline_serializer('InitializePaymentResponse', {
+            'authorization_url': serializers.URLField(),
+            'reference': serializers.CharField(),
+        }),
+    )
     def post(self, request):
         ride_id = request.data.get('ride_id')
         ride = get_object_or_404(Ride, id=ride_id, rider=request.user)
@@ -43,6 +52,8 @@ class PaymentWebhookView(APIView):
     permission_classes = [AllowAny]
     throttle_classes = []
 
+    # called by Paystack, not by our clients
+    @extend_schema(exclude=True)
     def post(self, request):
         paystack_signature = request.headers.get('x-paystack-signature', '')
         computed_signature = hmac.new(

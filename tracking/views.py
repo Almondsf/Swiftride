@@ -3,6 +3,7 @@ from rest_framework.response import Response
 from rest_framework import serializers, status
 from rides.permissions import IsDriver
 from .models import DriverLocation
+from drf_spectacular.utils import extend_schema
 
 
 class DriverLocationSerializer(serializers.ModelSerializer):
@@ -16,12 +17,14 @@ class DriverLocationView(APIView):
     """Drivers report where they are and whether they're taking rides."""
     permission_classes = [IsDriver]
 
+    @extend_schema(responses=DriverLocationSerializer)
     def get(self, request):
         location = DriverLocation.objects.filter(driver=request.user).first()
         if not location:
             return Response({'error': 'No location reported yet'}, status=status.HTTP_404_NOT_FOUND)
         return Response(DriverLocationSerializer(location).data)
 
+    @extend_schema(request=DriverLocationSerializer, responses=DriverLocationSerializer)
     def post(self, request):
         location = DriverLocation.objects.filter(driver=request.user).first()
         serializer = DriverLocationSerializer(location, data=request.data, partial=location is not None)

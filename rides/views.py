@@ -15,6 +15,8 @@ from .tasks import find_driver_for_ride
 from .notifications import notify_ride_status, notify_offer_withdrawn
 from .ratings import rating_summary
 from accounts.models import CustomUser
+from drf_spectacular.utils import extend_schema, inline_serializer
+from rest_framework import serializers
 
 
 def withdraw_pending_offers(ride_id):
@@ -88,6 +90,7 @@ class RideOfferListView(generics.ListAPIView):
 class AcceptOfferView(APIView):
     permission_classes = [IsDriver]
     
+    @extend_schema(request=None, responses=RideSerializer)
     def post(self, request, pk):
         with transaction.atomic():
             # lock the offer so it can't expire underneath us
@@ -114,6 +117,7 @@ class AcceptOfferView(APIView):
 class DeclineOfferView(APIView):
     permission_classes = [IsDriver]
     
+    @extend_schema(request=None, responses=inline_serializer('DeclineOfferResponse', {'status': serializers.CharField()}))
     def post(self, request, pk):
         offer = get_object_or_404(RideOffer, pk=pk, driver=request.user)
         declined = RideOffer.objects.filter(pk=pk, status='pending').update(status='declined')
@@ -173,6 +177,7 @@ class RateRideView(APIView):
     """Rider rates the driver, or driver rates the rider, after a completed ride."""
     permission_classes = [IsAuthenticated]
     
+    @extend_schema(request=RatingSerializer, responses={201: RatingSerializer})
     def post(self, request, pk):
         ride = get_object_or_404(Ride, pk=pk, status='completed')
         if request.user.id == ride.rider_id:
@@ -195,6 +200,10 @@ class RateRideView(APIView):
 class UserRatingView(APIView):
     permission_classes = [IsAuthenticated]
     
+    @extend_schema(responses=inline_serializer('RatingSummary', {
+        'average': serializers.FloatField(allow_null=True),
+        'count': serializers.IntegerField(),
+    }))
     def get(self, request, user_id):
         get_object_or_404(CustomUser, pk=user_id)
         return Response(rating_summary(user_id))

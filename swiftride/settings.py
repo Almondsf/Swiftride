@@ -10,6 +10,7 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/6.0/ref/settings/
 """
 
+import sys
 from pathlib import Path
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -45,6 +46,7 @@ INSTALLED_APPS = [
     'rest_framework',
     'channels',
     'corsheaders',
+    'drf_spectacular',
     
     'accounts',
     'rides',
@@ -137,6 +139,7 @@ AUTH_PASSWORD_VALIDATORS = [
 ]
 
 REST_FRAMEWORK = {
+    'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
     'DEFAULT_AUTHENTICATION_CLASSES': (
         'rest_framework_simplejwt.authentication.JWTAuthentication',
     ),
@@ -150,6 +153,16 @@ REST_FRAMEWORK = {
         'user': '200/hour',
     }
 }
+
+SPECTACULAR_SETTINGS = {
+    'TITLE': 'SwiftRide API',
+    'DESCRIPTION': 'Ride hailing: requests, driver matching and offers, live tracking, pricing and payments.',
+    'VERSION': '1.0.0',
+}
+
+# password hashing is deliberately slow; tests don't need that
+if 'test' in sys.argv:
+    PASSWORD_HASHERS = ['django.contrib.auth.hashers.MD5PasswordHasher']
 
 from datetime import timedelta
 

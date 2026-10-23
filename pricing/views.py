@@ -8,6 +8,8 @@ from .surge import current_surge
 from rest_framework.throttling import UserRateThrottle
 from django.views.decorators.cache import cache_page
 from django.utils.decorators import method_decorator
+from drf_spectacular.utils import extend_schema, inline_serializer, OpenApiParameter
+from rest_framework import serializers
 
 
 class FareEstimateRateThrottle(UserRateThrottle):
@@ -17,6 +19,18 @@ class FareEstimateRateThrottle(UserRateThrottle):
 class FareEstimateView(APIView):
     permission_classes = [IsAuthenticated]
     throttle_classes = [FareEstimateRateThrottle]
+
+    @extend_schema(
+        request=inline_serializer('FareEstimateRequest', {
+            'pickup': serializers.ListField(child=serializers.FloatField(), min_length=2, max_length=2, help_text='[lat, lng]'),
+            'dropoff': serializers.ListField(child=serializers.FloatField(), min_length=2, max_length=2, help_text='[lat, lng]'),
+            'duration_minutes': serializers.FloatField(required=False),
+        }),
+        responses=inline_serializer('FareEstimateResponse', {
+            'estimated_fare': serializers.FloatField(),
+            'surge_multiplier': serializers.DecimalField(max_digits=3, decimal_places=1),
+        }),
+    )
     def post(self, request):
         try:
             pickup = request.data.get('pickup')
@@ -39,6 +53,15 @@ class SurgeView(APIView):
     """Current surge at a location, e.g. for a banner before the rider books."""
     permission_classes = [IsAuthenticated]
 
+    @extend_schema(
+        parameters=[
+            OpenApiParameter('lat', float, required=True),
+            OpenApiParameter('lng', float, required=True),
+        ],
+        responses=inline_serializer('SurgeResponse', {
+            'surge_multiplier': serializers.DecimalField(max_digits=3, decimal_places=1),
+        }),
+    )
     def get(self, request):
         try:
             lat = float(request.query_params['lat'])
