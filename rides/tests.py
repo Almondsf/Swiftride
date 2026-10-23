@@ -1,13 +1,17 @@
 from datetime import timedelta
+from io import StringIO
 from decimal import Decimal
 from unittest.mock import patch
 
 from django.core.cache import cache
+from django.core.management import call_command, CommandError
+from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 from rest_framework.test import APITestCase
 
 from accounts.models import CustomUser
+from tracking.models import DriverLocation
 from .models import Ride
 
 
@@ -117,3 +121,19 @@ class FareEstimateTests(APITestCase):
         normal = self.client.post(url, body, format='json').data['estimated_fare']
         surged = self.client.post(url, {**body, 'surge_multiplier': 0.1}, format='json').data['estimated_fare']
         self.assertEqual(normal, surged)
+
+
+class SeedDemoCommandTests(TestCase):
+    @override_settings(DEBUG=True)
+    def test_seeds_online_drivers_and_riders_idempotently(self):
+        call_command('seed_demo', drivers=4, riders=2, stdout=StringIO())
+        call_command('seed_demo', drivers=4, riders=2, stdout=StringIO())
+        self.assertEqual(CustomUser.objects.filter(role='driver').count(), 4)
+        self.assertEqual(CustomUser.objects.filter(role='rider').count(), 2)
+        self.assertEqual(DriverLocation.objects.filter(is_online=True).count(), 4)
+        self.assertTrue(CustomUser.objects.get(email='rider1@demo.swiftride').check_password('demo12345'))
+
+    @override_settings(DEBUG=False)
+    def test_refuses_without_debug(self):
+        with self.assertRaises(CommandError):
+            call_command('seed_demo', stdout=StringIO())
